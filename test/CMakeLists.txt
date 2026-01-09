@@ -41,6 +41,7 @@ add_tests(
     cx_set
     cx_vector
     default_panic
+    enum_with_name
     for_each_n_args
     function_traits
     functional
