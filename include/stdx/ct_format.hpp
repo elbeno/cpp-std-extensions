@@ -277,11 +277,26 @@ CONSTEVAL auto perform_format(auto s, auto const &v) -> ct_string<N + 1> {
     return cts;
 }
 
+[[maybe_unused]] constexpr inline struct format_as_t {
+    template <typename T>
+        requires true
+    constexpr auto operator()(T &&t) const
+        noexcept(noexcept(ct_format_as(std::forward<T>(t))))
+            -> decltype(ct_format_as(std::forward<T>(t))) {
+        return ct_format_as(std::forward<T>(t));
+    }
+
+    template <typename T>
+    constexpr auto operator()(T &&t) const -> decltype(auto) {
+        return T(std::forward<T>(t));
+    }
+} try_format_as;
+
 template <ct_string Fmt, std::size_t Start, typename Arg>
 constexpr auto format1(Arg arg) {
     if constexpr (requires { arg_value(arg); }) {
         constexpr auto fmtstr = STDX_FMT_COMPILE(Fmt);
-        constexpr auto a = arg_value(arg);
+        constexpr auto a = try_format_as(arg_value(arg));
         if constexpr (is_specialization_of_v<std::remove_cv_t<decltype(a)>,
                                              format_result>) {
             constexpr auto s = convert_input(a.str);
@@ -323,21 +338,6 @@ template <ct_string Fmt> struct fmt_data {
     constexpr static auto last_cts =
         to_ct_string<splits[N].view.size()>(splits[N].view);
 };
-
-[[maybe_unused]] constexpr inline struct format_as_t {
-    template <typename T>
-        requires true
-    constexpr auto operator()(T &&t) const
-        noexcept(noexcept(ct_format_as(std::forward<T>(t))))
-            -> decltype(ct_format_as(std::forward<T>(t))) {
-        return ct_format_as(std::forward<T>(t));
-    }
-
-    template <typename T>
-    constexpr auto operator()(T &&t) const -> decltype(auto) {
-        return T(std::forward<T>(t));
-    }
-} format_as;
 } // namespace detail
 
 template <ct_string Fmt,
@@ -361,8 +361,9 @@ constexpr auto ct_format = [](auto &&...args) {
 
     auto result = [&]<std::size_t... Is>(std::index_sequence<Is...>,
                                          auto &&...as) {
-        return (format1.template operator()<Is>(detail::format_as(FWD(as))) +
-                ... + make_format_result(cts_t<data::last_cts>{}));
+        return (
+            format1.template operator()<Is>(detail::try_format_as(FWD(as))) +
+            ... + make_format_result(cts_t<data::last_cts>{}));
     }(std::make_index_sequence<data::N>{}, FWD(args)...);
     constexpr auto str = detail::convert_output<result.str.value, Output>();
     using Spans = typename std::remove_cvref_t<decltype(result)>::spans_t;

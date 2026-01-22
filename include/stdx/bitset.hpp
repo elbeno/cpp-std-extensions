@@ -477,6 +477,12 @@ template <typename T, typename F, typename R, auto M, typename... S>
 
 #if __cplusplus >= 202002L
 template <std::size_t N> bitset(ct_string<N>) -> bitset<N - 1>;
+
+template <auto Size, typename StorageElem>
+    requires(to_underlying(Size) <= 64)
+constexpr auto format_as(bitset<Size, StorageElem> const &bs) {
+    return bs.to_natural();
+}
 #endif
 } // namespace v1
 } // namespace stdx

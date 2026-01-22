@@ -1,4 +1,5 @@
 #include <stdx/bitset.hpp>
+#include <stdx/ct_format.hpp>
 
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -517,3 +518,23 @@ TEST_CASE("zero size bitset", "[bitset]") {
     bs3 >>= 1;
     CHECK(bs3.to<std::uint8_t>() == 0);
 }
+
+#if __cplusplus >= 202002L
+TEMPLATE_TEST_CASE("format bitset (runtime)", "[bitset]", std::uint8_t,
+                   std::uint16_t, std::uint32_t, std::uint64_t) {
+    using bs_t = stdx::bitset<stdx::bit_size<TestType>()>;
+    auto bs = bs_t{stdx::all_bits};
+    auto fr = stdx::ct_format<"{}">(bs);
+    STATIC_CHECK(std::is_same_v<decltype(fr.args), stdx::tuple<bs_t>>);
+    CHECK(fr.args == stdx::tuple{bs_t{stdx::all_bits}});
+}
+
+TEST_CASE("format bitset (compile-time)", "[bitset]") {
+    using namespace stdx::literals;
+    using bs_t = stdx::bitset<8>;
+    using expected_spans_t = stdx::type_list<stdx::format_span<2, 4>>;
+    STATIC_CHECK(stdx::ct_format<"0x{:x}">(CX_VALUE(bs_t{stdx::all_bits})) ==
+                 stdx::make_format_result<expected_spans_t>(
+                     "0xff"_ctst, stdx::tuple{stdx::ct_format_arg<bs_t>{}}));
+}
+#endif
