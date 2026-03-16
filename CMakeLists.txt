@@ -9,7 +9,7 @@ project(
 
 include(cmake/get_cpm.cmake)
 if(PROJECT_IS_TOP_LEVEL)
-    cpmaddpackage("gh:intel/cicd-repo-infrastructure#dev")
+    cpmaddpackage("gh:elbeno/cicd-repo-infrastructure#build-fixes")
 else()
     cpmaddpackage("gh:intel/cicd-repo-infrastructure#3e2bef0")
 endif()
