@@ -67,6 +67,7 @@ add_tests(
     remove_cvref
     rollover
     span
+    test
     to_underlying
     tuple
     tuple_algorithms
