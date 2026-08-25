@@ -9,6 +9,8 @@
 
 #include <array>
 #include <compare>
+#include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -489,4 +491,9 @@ TEST_CASE("tuple tail (rvalue)", "[tuple]") {
 TEST_CASE("tuple tail (empty tuple)", "[tuple]") {
     constexpr auto t = stdx::tuple{};
     STATIC_CHECK(t.tail() == stdx::tuple{});
+}
+
+TEST_CASE("foo", "[tuple]") {
+    using T = stdx::tuple<std::optional<std::tuple<int>>>;
+    [[maybe_unused]] auto t = T{};
 }
