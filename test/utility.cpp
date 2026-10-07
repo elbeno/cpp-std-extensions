@@ -5,6 +5,8 @@
 
 #include <array>
 #include <cstdint>
+#include <memory>
+#include <span>
 #include <string_view>
 #include <type_traits>
 
@@ -448,3 +450,124 @@ TEST_CASE("destructurable integer_sequence", "[utility]") {
 }
 #endif
 STDX_PRAGMA(diagnostic pop)
+
+namespace stdx {
+
+template <std::size_t Bytes, std::size_t HeaderExtent,
+          typename HeaderT = std::uint32_t, typename DataT = std::uint32_t>
+struct buffer_with_header_t {
+    constexpr static auto desired_header_bytes =
+        sized<HeaderT>{HeaderExtent}.template in<std::uint8_t>();
+    constexpr static std::size_t actual_header_extent =
+        desired_header_bytes <= Bytes ? HeaderExtent : 0;
+    static_assert(actual_header_extent == HeaderExtent or Bytes == 0,
+                  "Not enough bytes given to fit the required header");
+
+    constexpr static std::size_t actual_header_bytes =
+        sized8{actual_header_extent}.in<HeaderT>();
+    static_assert(is_aligned_with<DataT>(actual_header_bytes),
+                  "Header size causes data to be misaligned");
+
+    constexpr static std::size_t actual_data_bytes =
+        Bytes > actual_header_bytes ? Bytes - actual_header_bytes : 0;
+    static_assert(is_aligned_with<DataT>(actual_data_bytes),
+                  "Header and data must fit the required size exactly");
+
+    constexpr static auto actual_data_extent =
+        sized8{actual_data_bytes}.in<DataT>();
+
+    [[no_unique_address]] std::array<HeaderT, actual_header_extent> header{};
+    [[no_unique_address]] std::array<DataT, actual_data_extent> data{};
+};
+
+template <std::size_t, typename T, std::size_t N> struct array_traits {
+    using type = std::array<T, N>;
+};
+
+template <std::size_t Tag, typename T> struct array_traits<Tag, T, 0> {
+    struct type {};
+};
+
+template <std::size_t Tag, typename T, std::size_t N>
+using array_traits_t = typename array_traits<Tag, T, N>::type;
+
+// template <typename T, std::size_t N, std::size_t = 0> struct header_holder_t
+// {
+//     [[no_unique_address]] array_traits_t<T, N> header{};
+// };
+
+template <typename T, std::size_t N, std::size_t = 0> struct data_holder_t {
+    [[no_unique_address]] array_traits_t<0, T, N> data{};
+};
+
+template <std::size_t Bytes, typename T = std::uint32_t>
+struct buffer_t : data_holder_t<T, sized8{Bytes}.in<T>()> {
+    static_assert(is_aligned_with<T>(Bytes),
+                  "Data must fit the required size exactly");
+
+    template <std::size_t HeaderExtent, typename HeaderT = std::uint32_t>
+    struct with_header {
+        constexpr static auto desired_header_bytes =
+            sized<HeaderT>{HeaderExtent}.template in<std::uint8_t>();
+        constexpr static std::size_t actual_header_extent =
+            desired_header_bytes <= Bytes ? HeaderExtent : 0;
+        static_assert(actual_header_extent == HeaderExtent or Bytes == 0,
+                      "Not enough bytes given to fit the required header");
+
+        constexpr static std::size_t actual_header_bytes =
+            sized8{actual_header_extent}.in<HeaderT>();
+        static_assert(is_aligned_with<T>(actual_header_bytes),
+                      "Header size causes data to be misaligned");
+
+        constexpr static std::size_t actual_data_bytes =
+            Bytes > actual_header_bytes ? Bytes - actual_header_bytes : 0;
+        static_assert(is_aligned_with<T>(actual_data_bytes),
+                      "Header and data must fit the required size exactly");
+
+        constexpr static auto actual_data_extent =
+            sized8{actual_data_bytes}.in<T>();
+
+        [[no_unique_address]] array_traits_t<0, HeaderT, actual_header_extent>
+            header{};
+        [[no_unique_address]] array_traits_t<1, T, actual_data_extent> data{};
+        // struct type : header_holder_t<HeaderT, actual_header_extent>,
+        //               data_holder_t<T, actual_data_extent, 1> {};
+    };
+
+    // template <std::size_t HeaderExtent, typename HeaderT = std::uint32_t>
+    // struct degenerate_with_header {
+    //     constexpr static auto desired_header_bytes =
+    //         sized<HeaderT>{HeaderExtent}.template in<std::uint8_t>();
+    //     constexpr static std::size_t actual_header_extent =
+    //         desired_header_bytes <= Bytes ? HeaderExtent : 0;
+    //     static_assert(actual_header_extent == HeaderExtent or Bytes == 0,
+    //                   "Not enough bytes given to fit the required header");
+
+    //     constexpr static std::size_t actual_header_bytes =
+    //         sized8{actual_header_extent}.in<HeaderT>();
+    //     static_assert(is_aligned_with<T>(actual_header_bytes),
+    //                   "Header size causes data to be misaligned");
+
+    //     constexpr static std::size_t actual_data_bytes =
+    //         Bytes > actual_header_bytes ? Bytes - actual_header_bytes : 0;
+    //     static_assert(is_aligned_with<T>(actual_data_bytes),
+    //                   "Header and data must fit the required size exactly");
+
+    //     constexpr static auto actual_data_extent =
+    //         sized8{actual_data_bytes}.in<T>();
+
+    //     struct type : header_holder_t<HeaderT, actual_header_extent>,
+    //                   data_holder_t<T, actual_data_extent, 1> {};
+    // };
+
+    template <std::size_t HeaderExtent, typename HeaderT = std::uint32_t>
+    using with_header_t = with_header<HeaderExtent, HeaderT>;
+};
+} // namespace stdx
+
+TEST_CASE("header and data: zero size", "[utility]") {
+    constexpr auto x = stdx::buffer_t<0>::with_header_t<3>{};
+    // STATIC_CHECK(std::tuple_size_v<decltype(x.header)> == 0);
+    // STATIC_CHECK(std::tuple_size_v<decltype(x.data)> == 0);
+    STATIC_CHECK(sizeof(x) == 2);
+}
